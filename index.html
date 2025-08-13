@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consolidated App</title>
+<style>
+/* style.css — mobile-first, light/dark theme */
+:root{
+  --bg:#fffdf8; --card:#fff; --panel:#f6f8fa; --text:#111827; --muted:#6b7280;
+  --accent:#ff8a3d; --accent-2:#ffd84d; --success:#10b981;
+  --radius:14px; --shadow:0 18px 60px rgba(20,30,60,.08);
+  font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+.container{max-width:420px;margin:0 auto;padding:14px;min-height:100vh}
+
+/* dark theme */
+body.dark{ --bg:#0b1220; --card:#071126; --panel:#071229; --text:#e6eef8; --muted:#9aa6b2; --shadow: none; }
+
+/* header & menu */
+.header{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.h-title{font-weight:800;font-size:20px}
+.menu-btn{border:0;background:transparent;font-size:22px;cursor:pointer}
+
+/* auth */
+.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:80vh}
+.auth-card{width:100%;max-width:420px;background:var(--card);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.input{width:100%;padding:12px;margin:8px 0;border-radius:999px;border:1px solid #eee;background:transparent;color:var(--text)}
+.btn{width:100%;padding:12px;border-radius:999px;border:0;cursor:pointer;font-weight:700}
+.btn-primary{background:var(--accent-2);color:#000}
+.btn-ghost{background:transparent;border:1px solid #eee;color:var(--text)}
+.small{font-size:12px;color:var(--muted)}
+.center{text-align:center}
+.link{color:var(--accent-2);text-decoration:none}
+
+/* cards */
+.card{background:var(--card);border-radius:16px;padding:12px;margin-top:12px;box-shadow:var(--shadow)}
+.block-title{font-weight:800;margin-bottom:8px}
+.kpi{display:flex;justify-content:space-between;align-items:center}
+.count{display:flex;gap:8px}
+.pill{background:linear-gradient(180deg,#fff3cc,#fff5dd);border-radius:12px;padding:10px 12px;text-align:center;min-width:78px}
+.pill .v{font-size:18px;font-weight:800}
+.pill .l{font-size:11px;color:#7a4b00}
+
+/* lists */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:12px;background:linear-gradient(180deg,#fff,#fff8f0)}
+.item .left{max-width:70%}
+.table{width:100%;border-collapse:collapse;margin-top:8px}
+.input-row{display:flex;gap:8px}
+
+/* menu popup */
+.menu{position:absolute;right:14px;top:56px;background:var(--card);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);display:none;z-index:1000}
+.menu a, .menu button{display:block;padding:12px 14px;border:0;background:transparent;text-align:left;width:100%}
+.menu a:hover,.menu button:hover{background:#f6f7fb;cursor:pointer}
+
+/* small helpers */
+.badge{display:inline-block;background:#fff3cc;color:#7a4b00;border-radius:999px;padding:6px 10px;font-size:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:#111;color:#fff;padding:8px 12px;border-radius:999px;z-index:9999}
+
+/* profile toggles */
+.switch{appearance:none;width:46px;height:26px;background:#eee;border-radius:999px;position:relative;cursor:pointer;outline:none}
+.switch:before{content:"";position:absolute;left:4px;top:4px;width:18px;height:18px;background:#fff;border-radius:50%;transition:all .18s}
+.switch:checked{background:#d1f7dc}
+.switch:checked:before{left:24px}
+
+/* responsive tweaks */
+@media(min-width:900px){
+  .container{transform:scale(.95); margin-top:18px}
+}
+
+</style>
+</head>
+<body>
+
+<nav>
+    <button onclick="showSection('dashboard')">Dashboard</button>
+    <button onclick="showSection('chat')">Chat</button>
+    <button onclick="showSection('collections')">Collections</button>
+    <button onclick="showSection('emergency')">Emergency</button>
+    <button onclick="showSection('income-expenses')">Income/Expenses</button>
+    <button onclick="showSection('login')">Login</button>
+    <button onclick="showSection('profile')">Profile</button>
+    <button onclick="showSection('signup')">Signup</button>
+    <button onclick="showSection('top-donations')">Top Donations</button>
+</nav>
+
+<section id="chat" style="display:none;">
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Group Chat</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">Group Chat</div><a class="link" href="dashboard.html">Back</a></div>
+  <div class="card">
+    <div id="chatWindow" class="list" style="height:50vh;overflow:auto"></div>
+    <div style="margin-top:8px" class="input-row">
+      <input id="chatInput" class="input" placeholder="Message..." />
+      <button id="chatSend" class="btn btn-primary">Send</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { watchAuth, listChat, sendChat } from './app.js';
+const chatWindow = document.getElementById('chatWindow'), chatInput = document.getElementById('chatInput'), chatSend = document.getElementById('chatSend');
+
+async function load(){
+  chatWindow.innerHTML = '';
+  const msgs = await listChat(500);
+  msgs.forEach(m=>{
+    const el = document.createElement('div'); el.className='item';
+    const by = m.system ? '<em>System</em>' : (m.by || 'User');
+    const when = m.at && m.at.toDate ? m.at.toDate().toLocaleString() : '';
+    el.innerHTML = `<div class="left"><strong>${by}</strong><div class="small">${m.text}</div></div><div class="small">${when}</div>`;
+    chatWindow.appendChild(el);
+  });
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+chatSend.onclick = async ()=>{
+  const txt = chatInput.value.trim(); if(!txt) return;
+  const user = (await import('./app.js')).auth.currentUser;
+  await sendChat(txt, user?.email);
+  chatInput.value=''; load();
+};
+watchAuth((u)=>load(), ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="collections" style="display:none;">
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Collections</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">Collections</div><a class="link" href="dashboard.html">Back</a></div>
+
+  <div id="colListWrap" class="card"><div id="colList" class="list"></div></div>
+
+  <div id="adminBox" class="card" style="display:none">
+    <div class="block-title">Add / Edit Collection (Admin)</div>
+    <input id="colTitle" class="input" placeholder="Title">
+    <input id="colDate" class="input" type="date">
+    <textarea id="colDesc" class="input" placeholder="Description" style="height:80px"></textarea>
+    <div class="input-row">
+      <button id="btnAdd" class="btn btn-primary">Add</button>
+      <button id="btnUpdate" class="btn btn-ghost" style="flex:1">Update selected</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  watchAuth, getUserProfile, listCollections, addCollection, updateCollection, deleteCollection, auth
+} from './app.js';
+
+const colList = document.getElementById('colList'), adminBox = document.getElementById('adminBox');
+const title = document.getElementById('colTitle'), dateEl = document.getElementById('colDate'), desc = document.getElementById('colDesc');
+let selectedId = null;
+
+function fmt(str){ return str||''; }
+
+async function loadList(user){
+  colList.innerHTML = '';
+  const cols = await listCollections();
+  if(cols.length===0) colList.innerHTML = '<div class="small">No collections yet</div>';
+  cols.forEach(c=>{
+    const el = document.createElement('div'); el.className='item';
+    el.innerHTML = `<div class="left"><strong>${c.title}</strong><div class="small">${c.description||''}</div></div>
+      <div style="text-align:right"><div class="small">${c.date||''}</div>
+      <div style="margin-top:8px"><button class="edit btn btn-ghost small">Edit</button> <button class="del btn btn-ghost small">Delete</button></div></div>`;
+    colList.appendChild(el);
+
+    const editBtn = el.querySelector('.edit'), delBtn = el.querySelector('.del');
+    editBtn.onclick = ()=> { selectedId = c.id; title.value = c.title; dateEl.value = c.date || ''; desc.value = c.description || ''; };
+    delBtn.onclick = async ()=> {
+      if(!confirm('Delete this collection?')) return;
+      const user = auth.currentUser;
+      await deleteCollection(c.id, c.title, user?.email);
+      loadList(user);
+    };
+  });
+}
+
+document.getElementById('btnAdd').onclick = async ()=>{
+  const obj = { title: title.value.trim(), date: dateEl.value, description: desc.value.trim() };
+  if(!obj.title) return alert('Title required');
+  const user = (await import('./app.js')).auth.currentUser;
+  await addCollection(obj, user?.email);
+  title.value=''; dateEl.value=''; desc.value='';
+  alert('Added');
+  loadList(user);
+};
+document.getElementById('btnUpdate').onclick = async ()=>{
+  if(!selectedId) return alert('Select item to update');
+  const obj = { title: title.value.trim(), date: dateEl.value, description: desc.value.trim() };
+  const user = (await import('./app.js')).auth.currentUser;
+  await updateCollection(selectedId, obj, user?.email);
+  selectedId = null; title.value=''; dateEl.value=''; desc.value='';
+  alert('Updated');
+  loadList(user);
+};
+
+watchAuth(async (user, profile)=>{
+  if(!user) return location.href='login.html';
+  const role = profile?.role || 'member';
+  adminBox.style.display = (role==='admin' || role==='superadmin') ? 'block' : 'none';
+  await loadList(user);
+}, ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="dashboard" style="display:none;">
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dashboard • Ganapathy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="h-title">Ganapathy</div>
+    <button id="btnMenu" class="menu-btn">⋮</button>
+    <div id="menu" class="menu">
+      <a href="collections.html">Collections</a>
+      <a id="linkFinance" href="income-expenses.html" style="display:none">Income & Expenses</a>
+      <a href="top-donations.html">Top Donations</a>
+      <a href="emergency.html">Emergency Contacts</a>
+      <a href="chat.html">Group Chat</a>
+      <a href="profile.html">My Profile</a>
+      <button id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
+  <!-- Festival countdown -->
+  <div class="card">
+    <div class="block-title" id="festName">Ganapathy Festival</div>
+    <div class="count" style="margin-top:8px">
+      <div class="pill"><div class="v" id="d">--</div><div class="l">Days</div></div>
+      <div class="pill"><div class="v" id="h">--</div><div class="l">Hours</div></div>
+      <div class="pill"><div class="v" id="m">--</div><div class="l">Minutes</div></div>
+      <div class="pill"><div class="v" id="s">--</div><div class="l">Seconds</div></div>
+    </div>
+  </div>
+
+  <!-- Finance overview (visible by admin or if public toggle on) -->
+  <div id="financeBox" class="card" style="display:none">
+    <div class="block-title">Finance Overview <span id="pubBadge" class="small"></span></div>
+    <div class="kpi">
+      <div><div class="small">Income</div><div class="big" id="kIncome">₹ 0</div></div>
+      <div><div class="small">Expenses</div><div class="big" id="kExpenses">₹ 0</div></div>
+      <div><div class="small">Balance</div><div class="big" id="kBalance">₹ 0</div></div>
+    </div>
+  </div>
+
+  <!-- Top donations -->
+  <div class="card">
+    <div class="block-title">Top Donations</div>
+    <div id="donPreview" class="list"></div>
+    <div class="small center" style="margin-top:8px"><a class="link" href="top-donations.html">See all donations</a></div>
+  </div>
+
+  <!-- Collections preview -->
+  <div class="card">
+    <div class="block-title">Latest Collections</div>
+    <div id="colPreview" class="list"></div>
+    <div class="small center" style="margin-top:8px"><a class="link" href="collections.html">Open Collections</a></div>
+  </div>
+
+  <!-- Emergency preview -->
+  <div class="card">
+    <div class="block-title">Emergency Contacts</div>
+    <div id="emPreview" class="list"></div>
+    <div class="small center" style="margin-top:8px"><a class="link" href="emergency.html">See contacts</a></div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  watchAuth, logout, getSettings, listDonations, listCollections, listContacts,
+  listIncome, listExpenses, getUserProfile
+} from './app.js';
+
+const fmt = n => new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(n||0);
+const menu = document.getElementById('menu'), btnMenu = document.getElementById('btnMenu');
+btnMenu.onclick = ()=> menu.style.display = (menu.style.display==='block'?'none':'block');
+
+document.getElementById('logoutBtn').onclick = ()=> logout().then(()=>location.href='login.html');
+
+async function refresh(user){
+  const settings = await getSettings();
+  const festivalName = settings?.festivalName || 'Ganapathy Festival';
+  const festivalDate = settings?.festivalDateISO || '2025-08-27T00:00:00';
+  const publicFinance = !!settings?.publicFinance;
+
+  document.getElementById('festName').innerText = festivalName;
+
+  // countdown
+  const t = new Date(festivalDate);
+  function tick(){
+    const diff = t - new Date();
+    if(diff<=0){ document.getElementById('d').innerText='0'; document.getElementById('h').innerText='0'; document.getElementById('m').innerText='0'; document.getElementById('s').innerText='0'; return; }
+    const d = Math.floor(diff/86400000), h = Math.floor(diff%86400000/3600000), m = Math.floor(diff%3600000/60000), s = Math.floor(diff%60000/1000);
+    document.getElementById('d').innerText = d; document.getElementById('h').innerText = h; document.getElementById('m').innerText = m; document.getElementById('s').innerText = s;
+  }
+  tick(); setInterval(tick, 1000);
+
+  // role and finance visibility
+  const profile = await getUserProfile(user.uid);
+  const role = profile?.role || 'member';
+  document.getElementById('linkFinance').style.display = (role==='admin' || role==='superadmin') ? 'block' : 'none';
+
+  const incomes = await listIncome(); const expenses = await listExpenses();
+  const incomeSum = incomes.reduce((a,b)=>a+(Number(b.amount)||0),0);
+  const expenseSum = expenses.reduce((a,b)=>a+(Number(b.amount)||0),0);
+  const balance = incomeSum - expenseSum;
+
+  // show finance if admin OR settings.publicFinance ON OR user local preference (profile.prefs.showBalanceLocal)
+  const localPref = profile?.prefs?.showBalanceLocal;
+  if(role==='admin' || role==='superadmin' || publicFinance || localPref){
+    document.getElementById('financeBox').style.display = 'block';
+    document.getElementById('kIncome').innerText = '₹ ' + fmt(incomeSum);
+    document.getElementById('kExpenses').innerText = '₹ ' + fmt(expenseSum);
+    document.getElementById('kBalance').innerText = '₹ ' + fmt(balance);
+    document.getElementById('pubBadge').innerText = publicFinance ? 'Public' : (role==='admin'||role==='superadmin' ? 'Private (admins)' : 'Hidden');
+  } else {
+    document.getElementById('financeBox').style.display = 'none';
+  }
+
+  // top donations
+  const dons = (await listDonations()).slice(0,3);
+  const dp = document.getElementById('donPreview'); dp.innerHTML = '';
+  if(dons.length===0) dp.innerHTML = '<div class="small">No donations yet</div>';
+  dons.forEach(d=>{
+    const el = document.createElement('div'); el.className='item';
+    const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : '';
+    el.innerHTML = `<div class="left"><strong>${d.name||'Anonymous'}</strong><div class="small">${when}</div></div><div class="small">₹ ${fmt(d.amount)}</div>`;
+    dp.appendChild(el);
+  });
+
+  // collections preview
+  const cols = (await listCollections()).slice(0,3);
+  const cp = document.getElementById('colPreview'); cp.innerHTML = '';
+  if(cols.length===0) cp.innerHTML = '<div class="small">No collections yet</div>';
+  cols.forEach(c=>{
+    const el = document.createElement('div'); el.className='item';
+    el.innerHTML = `<div class="left"><strong>${c.title}</strong><div class="small">${c.description||''}</div></div><div class="small">${c.date||''}</div>`;
+    cp.appendChild(el);
+  });
+
+  // emergency
+  const cons = (await listContacts()).slice(0,3);
+  const ep = document.getElementById('emPreview'); ep.innerHTML='';
+  if(cons.length===0) ep.innerHTML = '<div class="small">No contacts yet</div>';
+  cons.forEach(c=>{
+    const el = document.createElement('div'); el.className='item';
+    el.innerHTML = `<div class="left"><strong>${c.name}</strong><div class="small">${c.duty}</div></div><div class="small"><a class="link" href="tel:${c.phone}">${c.phone}</a></div>`;
+    ep.appendChild(el);
+  });
+}
+
+import { listContacts, listCollections, listDonations, listIncome, listExpenses } from './app.js';
+watchAuth((user)=>refresh(user), ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="emergency" style="display:none;">
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emergency Contacts</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">Emergency Contacts</div><a class="link" href="dashboard.html">Back</a></div>
+
+  <div class="card">
+    <div id="contacts" class="list"></div>
+    <div class="small">Keep these reachable during events.</div>
+  </div>
+
+  <div id="adminBox" class="card" style="display:none">
+    <div class="block-title">Add Contact (Admin)</div>
+    <input id="cName" class="input" placeholder="Name">
+    <input id="cDuty" class="input" placeholder="Duty (e.g., Security)">
+    <input id="cPhone" class="input" placeholder="Phone">
+    <button id="addBtn" class="btn btn-primary">Add Contact</button>
+  </div>
+</div>
+
+<script type="module">
+import { watchAuth, listContacts, addContact } from './app.js';
+
+async function render(user, profile){
+  const list = document.getElementById('contacts'); list.innerHTML = '';
+  const cons = await listContacts();
+  if(cons.length===0) list.innerHTML = '<div class="small">No contacts yet</div>';
+  cons.forEach(c=>{
+    const el=document.createElement('div'); el.className='item';
+    el.innerHTML = `<div class="left"><strong>${c.name}</strong><div class="small">${c.duty}</div></div><div class="small"><a class="link" href="tel:${c.phone}">${c.phone}</a></div>`;
+    list.appendChild(el);
+  });
+  document.getElementById('adminBox').style.display = (profile?.role==='admin' || profile?.role==='superadmin') ? 'block' : 'none';
+}
+
+document.getElementById('addBtn').onclick = async ()=>{
+  const n=document.getElementById('cName').value.trim(), d=document.getElementById('cDuty').value.trim(), p=document.getElementById('cPhone').value.trim();
+  if(!n||!d||!p) return alert('All fields required');
+  const user = (await import('./app.js')).auth.currentUser;
+  await addContact(n,d,p,user?.email);
+  location.reload();
+};
+
+watchAuth((u,p)=>render(u,p), ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="income-expenses" style="display:none;">
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Income & Expenses</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">Income & Expenses</div><a class="link" href="dashboard.html">Back</a></div>
+
+  <div class="card">
+    <div class="block-title">Visibility</div>
+    <label class="small">Make finance visible to members?</label>
+    <input type="checkbox" id="publicSwitch" class="switch" />
+    <div class="small">When ON, members see totals on dashboard.</div>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Totals</div>
+    <div class="kpi">
+      <div><div class="small">Income</div><div class="big" id="kInc">₹ 0</div></div>
+      <div><div class="small">Expenses</div><div class="big" id="kExp">₹ 0</div></div>
+      <div><div class="small">Balance</div><div class="big" id="kBal">₹ 0</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Add Income</div>
+    <input id="iTitle" class="input" placeholder="Title">
+    <input id="iAmt" class="input" type="number" placeholder="Amount">
+    <button id="addInc" class="btn btn-primary">Add Income</button>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Add Expense</div>
+    <input id="eTitle" class="input" placeholder="Title">
+    <input id="eAmt" class="input" type="number" placeholder="Amount">
+    <button id="addExp" class="btn btn-primary">Add Expense</button>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Income List</div>
+    <table class="table"><tbody id="incRows"></tbody></table>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Expenses List</div>
+    <table class="table"><tbody id="expRows"></tbody></table>
+  </div>
+</div>
+
+<script type="module">
+import { watchAuth, getUserProfile, listIncome, listExpenses, addIncome, addExpense, getSettings, setSettings } from './app.js';
+
+function fmt(n){ return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(n||0); }
+
+async function init(user, profile){
+  const role = profile?.role || 'member';
+  if(!(role==='admin' || role==='superadmin')){
+    document.body.innerHTML = '<div class="container"><div class="card">Access denied. Admins only.</div></div>';
+    return;
+  }
+
+  async function load(){
+    const inc = await listIncome(); const exp = await listExpenses();
+    const income = inc.reduce((a,b)=>a+(Number(b.amount)||0),0);
+    const expenses = exp.reduce((a,b)=>a+(Number(b.amount)||0),0);
+    const bal = income - expenses;
+    document.getElementById('kInc').innerText = '₹ ' + fmt(income);
+    document.getElementById('kExp').innerText = '₹ ' + fmt(expenses);
+    document.getElementById('kBal').innerText = '₹ ' + fmt(bal);
+
+    const ir = document.getElementById('incRows'); ir.innerHTML = ''; inc.forEach(i=>{ const tr = document.createElement('tr'); tr.innerHTML = `<td>${i.title}</td><td class="right">₹ ${fmt(i.amount)}</td>`; ir.appendChild(tr); });
+    const er = document.getElementById('expRows'); er.innerHTML = ''; exp.forEach(i=>{ const tr = document.createElement('tr'); tr.innerHTML = `<td>${i.title}</td><td class="right">₹ ${fmt(i.amount)}</td>`; er.appendChild(tr); });
+  }
+
+  document.getElementById('addInc').onclick = async ()=>{ const t=document.getElementById('iTitle').value.trim(), a=Number(document.getElementById('iAmt').value); if(!t||!a) return alert('title+amount'); await addIncome(t,a,user.email); load(); };
+  document.getElementById('addExp').onclick = async ()=>{ const t=document.getElementById('eTitle').value.trim(), a=Number(document.getElementById('eAmt').value); if(!t||!a) return alert('title+amount'); await addExpense(t,a,user.email); load(); };
+
+  // public switch
+  const st = await getSettings();
+  document.getElementById('publicSwitch').checked = !!st?.publicFinance;
+  document.getElementById('publicSwitch').onchange = async (e)=>{ await setSettings({ publicFinance: e.target.checked }); alert('Visibility updated'); };
+
+  load();
+}
+
+watchAuth(async (user, profile)=>init(user, profile), ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="login" style="display:none;">
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login • Ganapathy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="center">Welcome Back</h1>
+      <p class="small center">Sign in to manage festival</p>
+
+      <input id="email" class="input" type="email" placeholder="Email" />
+      <input id="password" class="input" type="password" placeholder="Password" />
+      <label class="small"><input id="remember" type="checkbox" /> Remember me (keep me signed in)</label>
+
+      <button id="btnLogin" class="btn btn-primary">Login</button>
+      <button id="btnGoogle" class="btn btn-ghost" style="margin-top:8px">Continue with Google</button>
+
+      <p class="small center" style="margin-top:10px">Don't have account? <a class="link" href="signup.html">Sign up</a></p>
+      <p id="msg" class="small" style="color:red"></p>
+
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { login, loginWithGoogle, watchAuth } from './app.js';
+
+// If already logged in redirect
+watchAuth((u)=>{ location.href='dashboard.html'; }, ()=>{ /* stay */ });
+
+const emailEl = document.getElementById('email'), passEl = document.getElementById('password'), msg = document.getElementById('msg');
+document.getElementById('btnLogin').onclick = async ()=> {
+  msg.textContent = '';
+  try {
+    await login(emailEl.value.trim(), passEl.value);
+  } catch (e) { console.error(e); msg.textContent = e.message || 'Login failed'; }
+};
+document.getElementById('btnGoogle').onclick = async ()=> {
+  msg.textContent = '';
+  try { await loginWithGoogle(); } catch (e) { console.error(e); msg.textContent = e.message || 'Google login failed'; }
+};
+</script>
+</body>
+</html>
+
+</section><section id="profile" style="display:none;">
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Profile</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">My Profile</div><a class="link" href="dashboard.html">Back</a></div>
+
+  <div class="card">
+    <div class="block-title">Account</div>
+    <div id="profileName" class="small"></div>
+    <div id="profileEmail" class="small"></div>
+    <div style="margin-top:8px"><a id="btnLogout" class="link">Logout</a></div>
+  </div>
+
+  <div class="card">
+    <div class="block-title">Preferences</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div>
+        <div class="small">Theme</div>
+        <div class="small">Light / Dark</div>
+      </div>
+      <label><input id="themeToggle" type="checkbox" class="switch" /> </label>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="small">Show Balance (local)</div>
+        <div class="small">Toggle to see balance in your dashboard (local setting)</div>
+      </div>
+      <label><input id="balanceToggle" type="checkbox" class="switch" /> </label>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { watchAuth, logout, getUserProfile, updateUserPrefs, auth } from './app.js';
+
+document.getElementById('btnLogout').onclick = ()=> logout().then(()=>location.href='login.html');
+
+function applyTheme(theme){
+  if(theme==='dark') document.body.classList.add('dark'); else document.body.classList.remove('dark');
+  localStorage.setItem('ganapathy_theme', theme);
+}
+
+watchAuth(async (user, profile)=>{
+  if(!user) return location.href='login.html';
+  document.getElementById('profileName').innerText = profile?.name || '';
+  document.getElementById('profileEmail').innerText = profile?.email || '';
+
+  // load prefs
+  const prefs = profile?.prefs || {};
+  const theme = prefs.theme || localStorage.getItem('ganapathy_theme') || 'light';
+  applyTheme(theme);
+  document.getElementById('themeToggle').checked = theme === 'dark';
+  document.getElementById('balanceToggle').checked = !!prefs.showBalanceLocal;
+
+  document.getElementById('themeToggle').onchange = async (e)=>{
+    const newTheme = e.target.checked ? 'dark' : 'light';
+    applyTheme(newTheme);
+    // persist to user prefs in Firestore
+    await updateUserPrefs(user.uid, { theme: newTheme, showBalanceLocal: document.getElementById('balanceToggle').checked });
+  };
+  document.getElementById('balanceToggle').onchange = async (e)=>{
+    const show = e.target.checked;
+    await updateUserPrefs(user.uid, { theme: document.getElementById('themeToggle').checked ? 'dark':'light', showBalanceLocal: show });
+    alert('Preference saved. Go back to dashboard to see effect.');
+  };
+}, ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section><section id="signup" style="display:none;">
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signup • Ganapathy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="center">Create account</h1>
+      <p class="small center">Join the festival community</p>
+
+      <input id="name" class="input" placeholder="Full name" />
+      <input id="email" class="input" type="email" placeholder="Email" />
+      <input id="password" class="input" type="password" placeholder="Password" />
+      <label class="small"><input id="reqAdmin" type="checkbox" /> Request admin access (requires approval)</label>
+
+      <button id="btnSignup" class="btn btn-primary">Sign up</button>
+      <button id="btnGoogle" class="btn btn-ghost" style="margin-top:8px">Continue with Google</button>
+
+      <p class="small center" style="margin-top:10px">Already have an account? <a class="link" href="login.html">Login</a></p>
+      <p id="msg" class="small" style="color:red"></p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { signup, loginWithGoogle, watchAuth } from './app.js';
+watchAuth(()=>location.href='dashboard.html', ()=>{});
+
+const nameEl = document.getElementById('name'), emailEl = document.getElementById('email'), passEl = document.getElementById('password'), reqAdmin = document.getElementById('reqAdmin'), msg = document.getElementById('msg');
+document.getElementById('btnSignup').onclick = async ()=> {
+  msg.textContent = '';
+  try {
+    await signup(nameEl.value.trim(), emailEl.value.trim(), passEl.value, reqAdmin.checked);
+    // redirect will be handled by auth watcher
+  } catch (e) { console.error(e); msg.textContent = e.message || 'Signup failed'; }
+};
+document.getElementById('btnGoogle').onclick = async ()=> {
+  msg.textContent = '';
+  try { await loginWithGoogle(); } catch (e) { console.error(e); msg.textContent = e.message || 'Google login failed'; }
+};
+</script>
+</body>
+</html>
+
+</section><section id="top-donations" style="display:none;">
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Top Donations</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="container">
+  <div class="header"><div class="h-title">Top Donations</div><a class="link" href="dashboard.html">Back</a></div>
+  <div id="rows" class="card"></div>
+
+  <div id="adminAdd" class="card" style="display:none">
+    <div class="block-title">Add donation (admin)</div>
+    <input id="donName" class="input" placeholder="Donor name" />
+    <input id="donAmt" class="input" type="number" placeholder="Amount" />
+    <button id="donAddBtn" class="btn btn-primary">Add</button>
+  </div>
+</div>
+
+<script type="module">
+import { watchAuth, listDonations, addDonation, getUserProfile } from './app.js';
+
+function fmt(n){ return new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(n||0); }
+
+async function render(user, profile){
+  const rows = document.getElementById('rows'); rows.innerHTML = '';
+  const list = await listDonations();
+  if(list.length===0) rows.innerHTML = '<div class="small">No donations yet</div>';
+  list.sort((a,b)=> (b.amount||0)-(a.amount||0)).forEach((d,i)=>{
+    const el=document.createElement('div'); el.className='item';
+    const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : '';
+    el.innerHTML = `<div class="left"><strong>${d.name||'Anonymous'}</strong><div class="small">${when}</div></div><div class="small">₹ ${fmt(d.amount)}</div>`;
+    rows.appendChild(el);
+  });
+
+  const role = profile?.role || 'member';
+  document.getElementById('adminAdd').style.display = (role==='admin' || role==='superadmin') ? 'block' : 'none';
+}
+document.getElementById('donAddBtn').onclick = async ()=>{
+  const n = document.getElementById('donName').value.trim(); const a = Number(document.getElementById('donAmt').value);
+  if(!n || !a) return alert('Name & amount');
+  await addDonation(n,a);
+  location.reload();
+};
+
+watchAuth(async (user, profile)=>render(user, profile), ()=>location.href='login.html');
+</script>
+</body>
+</html>
+
+</section>
+
+<script>
+// app.js — Firebase config and helpers (v10)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import {
+  getAuth, setPersistence, browserLocalPersistence,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import {
+  getFirestore, doc, setDoc, getDoc, collection, addDoc,
+  getDocs, updateDoc, deleteDoc, query, orderBy, where, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+export const firebaseConfig = {
+  apiKey: "AIzaSyACYX0sGSNPMFUWnJT8N5f5Tb82gMjqzcc",
+  authDomain: "kolur-85c1f.firebaseapp.com",
+  projectId: "kolur-85c1f",
+  storageBucket: "kolur-85c1f.firebasestorage.app",
+  messagingSenderId: "652302989474",
+  appId: "1:652302989474:web:1d5a54deb03fce77137ffb"
+};
+export const SUPER_ADMIN_EMAIL = "harishkumar23489@gmail.com";
+
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+await setPersistence(auth, browserLocalPersistence);
+const googleProvider = new GoogleAuthProvider();
+
+/* ------------------------
+   User profile & roles
+   ------------------------ */
+export async function ensureUserProfile(user, displayName = "", prefs = {}) {
+  const uref = doc(db, "users", user.uid);
+  const snap = await getDoc(uref);
+  if (!snap.exists()) {
+    const role = (user.email === SUPER_ADMIN_EMAIL) ? "superadmin" : "member";
+    const data = {
+      name: displayName || user.email.split("@")[0],
+      email: user.email,
+      role,
+      prefs: { theme: prefs.theme || "light", showBalanceLocal: prefs.showBalanceLocal || false },
+      createdAt: serverTimestamp()
+    };
+    await setDoc(uref, data);
+    return data;
+  } else {
+    const data = snap.data();
+    if (user.email === SUPER_ADMIN_EMAIL && data.role !== "superadmin") {
+      await updateDoc(uref, { role: "superadmin" });
+      data.role = "superadmin";
+    }
+    return data;
+  }
+}
+export function watchAuth(onUser, onNoUser) {
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const profile = await ensureUserProfile(user, user.displayName || "");
+      onUser && onUser(user, profile);
+    } else {
+      onNoUser && onNoUser();
+    }
+  });
+}
+
+/* ------------------------
+   Auth actions
+   ------------------------ */
+export async function signup(name, email, password, requestAdmin = false) {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  await ensureUserProfile(cred.user, name, { theme: "light" });
+  if (requestAdmin) {
+    await addDoc(collection(db, "pendingAdmins"), { email, requestedAt: serverTimestamp() });
+  }
+  return cred.user;
+}
+export async function login(email, password) {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  await ensureUserProfile(cred.user, cred.user.displayName || "");
+  return cred.user;
+}
+export async function loginWithGoogle() {
+  const res = await signInWithPopup(auth, googleProvider);
+  await ensureUserProfile(res.user, res.user.displayName || "");
+  return res.user;
+}
+export async function logout() { await signOut(auth); }
+
+/* ------------------------
+   Settings (settings/general)
+   ------------------------ */
+export async function getSettings() {
+  const snap = await getDoc(doc(db, "settings", "general"));
+  return snap.exists() ? snap.data() : null;
+}
+export async function setSettings(obj) {
+  await setDoc(doc(db, "settings", "general"), obj, { merge: true });
+}
+
+/* ------------------------
+   Donations & finance
+   ------------------------ */
+export async function listDonations(limit = 200) {
+  const snaps = await getDocs(query(collection(db, "donations"), orderBy("createdAt", "desc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() })).slice(0, limit);
+}
+export async function addDonation(name, amount) {
+  return await addDoc(collection(db, "donations"), { name, amount: Number(amount || 0), createdAt: serverTimestamp() });
+}
+export async function listIncome() {
+  const snaps = await getDocs(query(collection(db, "income"), orderBy("createdAt", "desc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function listExpenses() {
+  const snaps = await getDocs(query(collection(db, "expenses"), orderBy("createdAt", "desc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function addIncome(title, amount, byEmail) {
+  return await addDoc(collection(db, "income"), { title, amount: Number(amount || 0), by: byEmail || null, createdAt: serverTimestamp() });
+}
+export async function addExpense(title, amount, byEmail) {
+  return await addDoc(collection(db, "expenses"), { title, amount: Number(amount || 0), by: byEmail || null, createdAt: serverTimestamp() });
+}
+
+/* ------------------------
+   Collections (admin editable) + chat note
+   ------------------------ */
+export async function listCollections() {
+  const snaps = await getDocs(query(collection(db, "collections"), orderBy("date", "desc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function addCollection(item, byEmail) {
+  const ref = await addDoc(collection(db, "collections"), { ...item, createdAt: serverTimestamp(), createdBy: byEmail || null });
+  await addDoc(collection(db, "chats"), { text: `${byEmail || "Admin"} added collection: ${item.title}`, at: serverTimestamp(), system: true });
+  return ref;
+}
+export async function updateCollection(id, item, byEmail) {
+  await updateDoc(doc(db, "collections", id), { ...item, updatedAt: serverTimestamp(), updatedBy: byEmail || null });
+  await addDoc(collection(db, "chats"), { text: `${byEmail || "Admin"} updated collection: ${item.title}`, at: serverTimestamp(), system: true });
+}
+export async function deleteCollection(id, title, byEmail) {
+  await deleteDoc(doc(db, "collections", id));
+  await addDoc(collection(db, "chats"), { text: `${byEmail || "Admin"} deleted collection: ${title}`, at: serverTimestamp(), system: true });
+}
+
+/* ------------------------
+   Chat
+   ------------------------ */
+export async function listChat(limit = 500) {
+  const snaps = await getDocs(query(collection(db, "chats"), orderBy("at", "asc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() })).slice(-limit);
+}
+export async function sendChat(text, byEmail) {
+  return await addDoc(collection(db, "chats"), { text, by: byEmail || null, at: serverTimestamp() });
+}
+
+/* ------------------------
+   Contacts
+   ------------------------ */
+export async function listContacts() {
+  const snaps = await getDocs(query(collection(db, "contacts"), orderBy("name", "asc")));
+  return snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function addContact(name, duty, phone, byEmail) {
+  return await addDoc(collection(db, "contacts"), { name, duty, phone, createdBy: byEmail || null, createdAt: serverTimestamp() });
+}
+export async function updateContact(id, obj) { return await updateDoc(doc(db, "contacts", id), obj); }
+export async function deleteContact(id) { return await deleteDoc(doc(db, "contacts", id)); }
+
+/* ------------------------
+   User prefs stored in users/{uid}.prefs
+   ------------------------ */
+export async function getUserProfile(uid) {
+  const snap = await getDoc(doc(db, "users", uid));
+  return snap.exists() ? snap.data() : null;
+}
+export async function updateUserPrefs(uid, prefs) {
+  await updateDoc(doc(db, "users", uid), { prefs }, { merge: true });
+}
+
+/* expose for console debugging */
+window.__APP = { auth, db, addCollection, sendChat, addDonation, addIncome, addExpense };
+
+</script>
+
+<script>
+function showSection(id) {
+    document.querySelectorAll('section').forEach(sec => sec.style.display = 'none');
+    document.getElementById(id).style.display = 'block';
+}
+document.addEventListener('DOMContentLoaded', () => {
+    showSection('dashboard'); // default section
+});
+</script>
+
+
+</body>
+</html>
