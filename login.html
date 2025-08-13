@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login • Ganapathy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="center">Welcome Back</h1>
+      <p class="small center">Sign in to manage festival</p>
+
+      <input id="email" class="input" type="email" placeholder="Email" />
+      <input id="password" class="input" type="password" placeholder="Password" />
+      <label class="small"><input id="remember" type="checkbox" /> Remember me (keep me signed in)</label>
+
+      <button id="btnLogin" class="btn btn-primary">Login</button>
+      <button id="btnGoogle" class="btn btn-ghost" style="margin-top:8px">Continue with Google</button>
+
+      <p class="small center" style="margin-top:10px">Don't have account? <a class="link" href="signup.html">Sign up</a></p>
+      <p id="msg" class="small" style="color:red"></p>
+
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { login, loginWithGoogle, watchAuth } from './app.js';
+
+// If already logged in redirect
+watchAuth((u)=>{ location.href='dashboard.html'; }, ()=>{ /* stay */ });
+
+const emailEl = document.getElementById('email'), passEl = document.getElementById('password'), msg = document.getElementById('msg');
+document.getElementById('btnLogin').onclick = async ()=> {
+  msg.textContent = '';
+  try {
+    await login(emailEl.value.trim(), passEl.value);
+  } catch (e) { console.error(e); msg.textContent = e.message || 'Login failed'; }
+};
+document.getElementById('btnGoogle').onclick = async ()=> {
+  msg.textContent = '';
+  try { await loginWithGoogle(); } catch (e) { console.error(e); msg.textContent = e.message || 'Google login failed'; }
+};
+</script>
+</body>
+</html>
